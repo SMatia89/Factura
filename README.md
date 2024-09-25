@@ -1,2 +1,0 @@
-# Factura
-Trabajo de computación

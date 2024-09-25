@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Presupuesto</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            width: 80%;
+            margin: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        th, td {
+            padding: 10px;
+            border: 1px solid #ddd;
+        }
+        button {
+            padding: 10px 15px;
+            margin-right: 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        input, select {
+            width: 100%;
+            padding: 8px;
+            margin: 4px 0;
+            box-sizing: border-box;
+        }
+        .totals {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+        }
+        .totals p {
+            font-size: 1.2em;
+            margin: 0;
+        }
+        @media print {
+            button {
+                display: none; /* Ocultar todos los botones al imprimir */
+            }
+            .cantidad, .producto, .precio-unitario, .precio {
+                border: none; /* Ocultar bordes de los inputs al imprimir */
+                background: none; /* Quitar fondo */
+                box-shadow: none; /* Quitar sombra */
+            }
+            th, td {
+                border: 1px solid #ddd; /* Mantener bordes de las celdas */
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2 style="text-align: center;">Presupuesto</h2>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <label for="cliente">Cliente:</label>
+            <input type="text" id="cliente" placeholder="Nombre y Apellido" required style="width: auto;">
+            <div id="fecha" style="margin-left: 20px; font-size: 1em;"></div>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Cantidad</th>
+                    <th>Producto</th>
+                    <th>Precio Unitario</th>
+                    <th>Precio</th>
+                </tr>
+            </thead>
+            <tbody id="productTable">
+                <tr>
+                    <td><input type="number" min="1" class="cantidad" placeholder="Cantidad" required></td>
+                    <td><input type="text" class="producto" placeholder="Nombre del Producto" required></td>
+                    <td><input type="number" min="1" class="precio-unitario" placeholder="Precio Unitario" required></td>
+                    <td><input type="number" class="precio" placeholder="Precio Total" readonly></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <button onclick="agregarProducto()">Agregar Producto</button>
+
+        <div class="totals">
+            <div>
+                <p>Valor de Cuota Ahora 12 - Sin Interés: <span id="cuota12"></span></p>
+                <p>Valor Ahora 18 - 75% de Interés: <span id="cuota18"></span></p>
+            </div>
+        </div>
+
+        <div class="totals">
+            <div>
+                <p>Subtotal: <span id="subtotal"></span></p>
+                <p>IVA: <span id="iva"></span></p>
+                <p>Total: <span id="total"></span></p>
+            </div>
+        </div>
+
+        <button onclick="calcularTotal()">Calcular Total</button>
+        <button onclick="imprimirPresupuesto()">Imprimir Presupuesto</button>
+        <button onclick="exportarPDF()">Exportar a PDF</button>
+    </div>
+
+    <script>
+        function establecerFecha() {
+            const fecha = new Date();
+            const dia = String(fecha.getDate()).padStart(2, '0');
+            const mes = String(fecha.getMonth() + 1).padStart(2, '0'); // Los meses comienzan en 0
+            const anio = fecha.getFullYear();
+            document.getElementById('fecha').textContent = `${dia}/${mes}/${anio}`;
+        }
+
+        window.onload = establecerFecha;
+
+        function agregarProducto() {
+            const tableBody = document.getElementById('productTable');
+            const newRow = document.createElement('tr');
+
+            newRow.innerHTML = `
+                <td><input type="number" min="1" class="cantidad" placeholder="Cantidad" required></td>
+                <td><input type="text" class="producto" placeholder="Nombre del Producto" required></td>
+                <td><input type="number" min="1" class="precio-unitario" placeholder="Precio Unitario" required></td>
+                <td><input type="number" class="precio" placeholder="Precio Total" readonly></td>
+            `;
+            tableBody.appendChild(newRow);
+            aplicarColorFilas();
+        }
+
+        function aplicarColorFilas() {
+            const rows = document.querySelectorAll('#productTable tr');
+            rows.forEach((row, index) => {
+                row.style.backgroundColor = index % 2 === 0 ? '#f2f2f2' : '#ffffff'; // Alternar colores
+            });
+        }
+
+        function calcularTotal() {
+            const ivaRate = 0.21;
+            const interestRateAhora18 = 0.75;
+
+            let subtotal = 0;
+
+            const rows = document.querySelectorAll('#productTable tr');
+
+            rows.forEach(row => {
+                const cantidad = row.querySelector('.cantidad').value;
+                const precioUnitario = row.querySelector('.precio-unitario').value;
+
+                if (cantidad === "" || precioUnitario === "") {
+                    row.remove(); // Eliminar la fila si hay campos vacíos
+                    return;
+                }
+
+                const cantidadNum = parseFloat(cantidad) || 0;
+                const precioUnitarioNum = parseFloat(precioUnitario) || 0;
+                const precioTotal = cantidadNum * precioUnitarioNum;
+
+                row.querySelector('.precio').value = precioTotal.toFixed(2);
+                subtotal += precioTotal;
+            });
+
+            const iva = subtotal * ivaRate;
+            const total = subtotal + iva;
+            const cuota12 = total / 12;
+            const cuota18 = total * (1 + interestRateAhora18) / 18;
+
+            document.getElementById('subtotal').textContent = subtotal.toFixed(2);
+            document.getElementById('iva').textContent = iva.toFixed(2);
+            document.getElementById('total').textContent = total.toFixed(2);
+            document.getElementById('cuota12').textContent = cuota12.toFixed(2);
+            document.getElementById('cuota18').textContent = cuota18.toFixed(2);
+        }
+
+        function imprimirPresupuesto() {
+            window.print();
+        }
+
+        function exportarPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+
+            const cliente = document.getElementById('cliente').value;
+            const subtotal = document.getElementById('subtotal').textContent;
+            const iva = document.getElementById('iva').textContent;
+            const total = document.getElementById('total').textContent;
+            const fecha = document.getElementById('fecha').textContent;
+
+            // Título
+            doc.setFontSize(18);
+            doc.text("Presupuesto", 20, 20);
+
+            // Cliente y fecha
+            doc.setFontSize(12);
+            doc.text(`Cliente: ${cliente}`, 20, 30);
+            doc.text(`Fecha: ${fecha}`, 160, 30); // Fecha a la derecha
+
+            doc.text("Productos:", 20, 45); // Ajustar la posición de "Productos"
+            
+            // Encabezado de tabla
+            const startY = 60;
+            const rowHeight = 10;
+            doc.setFontSize(10);
+            doc.setFillColor(200, 200, 200);
+            doc.rect(20, startY, 170, rowHeight, 'F'); // Fondo de encabezado
+            doc.text("Cantidad", 22, startY + 7);
+            doc.text("Producto", 72, startY + 7);
+            doc.text("Precio Unitario", 130, startY + 7);
+            doc.text("Precio", 160, startY + 7);
+            
+            // Filas de productos
+            let lineHeight = startY + rowHeight + 5; // Comenzar después del encabezado
+            const rows = document.querySelectorAll('#productTable tr');
+
+            rows.forEach((row, index) => {
+                const cantidad = row.querySelector('.cantidad').value;
+                const producto = row.querySelector('.producto').value;
+                const precioUnitario = row.querySelector('.precio-unitario').value;
+                const precioTotal = row.querySelector('.precio').value;
+
+                if (cantidad && producto && precioUnitario) {
+                    const fillColor = index % 2 === 0 ? [240, 240, 240] : [255, 255, 255];
+                    doc.setFillColor(...fillColor);
+                    doc.rect(20, lineHeight, 170, rowHeight, 'F'); // Fondo de fila
+
+                    doc.setFontSize(10);
+                    doc.text(`${cantidad}`, 22, lineHeight + 7);
+                    doc.text(`${producto}`, 72, lineHeight + 7);
+                    doc.text(`$${precioUnitario}`, 130, lineHeight + 7);
+                    doc.text(`$${precioTotal}`, 160, lineHeight + 7);
+                    lineHeight += rowHeight;
+                }
+            });
+
+            // Totales a la derecha
+            const totalX = 160; // Alineación a la derecha
+            lineHeight += 5; // Espacio adicional
+            doc.text(`Subtotal: $${subtotal}`, totalX, lineHeight);
+            lineHeight += rowHeight;
+            doc.text(`IVA: $${iva}`, totalX, lineHeight);
+            lineHeight += rowHeight;
+            doc.text(`Total: $${total}`, totalX, lineHeight);
+            
+            // Línea en la parte inferior
+            doc.setDrawColor(0); // Color de la línea
+            doc.line(20, 280, 190, 280); // Dibuja la línea
+
+            doc.save('presupuesto.pdf');
+        }
+    </script>
+</body>
+</html>
